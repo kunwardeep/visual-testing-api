@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Parameters:
+  TagUpdateFunction:
+    Type: String
+    Description: 'Update the function code automatically'
+    Default: 'true'
+  TagTeamName:
+    Type: String
+    Description: 'Name of the team'
+    Default: '<your_team_name>'
+  TagAsset:
+    Type: String
+    Description: 'Name of the asset'
+    Default: 'visual-droid'  
+  TagWorkload:
+    Type: String
+    Description: 'Type of workload being supported by this resource'
+    Default: 'delivery'  
+  TagDataClassificationInternalUseOnly:
+    Type: String
+    Description: 'Data classification - public, internal-use-only etc'
+    Default: 'internal-use-only'  
+  TagDataClassificationNone:
+    Type: String
+    Description: 'Data classification - public, internal-use-only etc'
+    Default: 'none'     
+  CodeBucketKey:
+    Type: String
+    Description: 'Zip file containing all the lambda functions'
+    Default: 'visual-droid.zip'
+  CodeBucketName:
+    Type: String
+    Description: 's3 bucket for storing source code'   
+Resources:
+  Resources:
+  s3CodeBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref CodeBucketName
+      Tags:
+        - Key: "asset" 
+          Value: !Ref TagAsset
+        - Key: "workload" 
+          Value: !Ref TagWorkload
+        - Key: "data-classification" 
+          Value: !Ref TagDataClassificationInternalUseOnly
+        - Key: "TeamNameTag" 
+          Value: !Ref TagTeamName

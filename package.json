@@ -1,0 +1,33 @@
+{
+  "name": "visual-testing-api",
+  "version": "1.0.0",
+  "description": "Api that stores images and makes call to do image comparison",
+  "main": "src/lambdas.js",
+  "scripts": {
+    "lint:local": "eslint --config .eslintrc.js \"**/*.js\"",
+    "lint:docker": "bin/runLintDocker.sh",
+    "test:unit:local": "mocha --reporter spec --timeout 30000 \"src/**/*.test.js\"",
+    "test:unit:docker": "bin/runUnitTestsDocker.sh",
+    "test:integration:local": ". ./aws/cloudFormation/setIntegrationTestsEnvironmentVariable.sh && mocha --reporter spec --timeout 30000 \"test/**/*.test.js\"",
+    "test:integration:docker": "bin/runIntegrationTestsDocker.sh"
+  },
+  "repository": "git@github.com:cultureamp/visual-testing-api.git",
+  "author": "kunwardeep singh bedi <kunwardeep@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "aws-sdk": "2.225.1",
+    "axios": "0.18.0",
+    "bluebird": "3.5.1",
+    "chai": "4.1.2",
+    "chai-as-promised": "7.1.1",
+    "eslint": "4.19.1",
+    "eslint-plugin-mocha": "5.0.0",
+    "fs-extra": "5.0.0",
+    "jsonschema": "1.2.4",
+    "lodash.clonedeep": "4.5.0",
+    "looks-same": "3.3.0",
+    "mocha": "5.1.1",
+    "uuid": "3.2.0",
+    "gm": "^1.23.1"
+  }
+}

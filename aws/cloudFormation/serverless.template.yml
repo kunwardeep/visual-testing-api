@@ -1,0 +1,539 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Parameters:
+  TagUpdateFunction:
+    Type: String
+    Description: 'Update the function code automatically'
+    Default: 'true'
+  TagTeamName:
+    Type: String
+    Description: 'Name of the team'
+    Default: '<your_team_name>'
+  TagAsset:
+    Type: String
+    Description: 'Name of the asset'
+    Default: 'visual-droid'  
+  TagWorkload:
+    Type: String
+    Description: 'Type of workload being supported by this resource'
+    Default: 'delivery'  
+  TagDataClassificationInternalUseOnly:
+    Type: String
+    Description: 'Data classification - public, internal-use-only etc'
+    Default: 'internal-use-only'  
+  TagDataClassificationNone:
+    Type: String
+    Description: 'Data classification - public, internal-use-only etc'
+    Default: 'none'  
+  CodeBucketKey:
+    Type: String
+    Description: 'Zip file containing all the lambda functions'
+    Default: 'visual-droid.zip'
+  CodeBucketName:
+    Type: String
+    Description: 's3 bucket for storing source code'
+  ImageBucketName:
+    Type: String
+    Description: 's3 bucket for storing images'
+  BasicAuthStringPassword:
+    Type: String
+    Description: 'Auth String password required by the auth function'
+  RoleName:
+    Type: String
+    Description: 'Name of the role'
+Resources:
+  snsTopicImageUploaded:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: visual_droid_sns_image_uploaded
+  snsTopicPolicyImageUploaded:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: "give-s3-image-bucket-publish-permission"
+        Version: '2012-10-17'
+        Statement:
+        - Sid:  sns_topic_policy_image_uploaded_sid
+          Effect: Allow
+          Principal:
+            Service: s3.amazonaws.com
+          Action: SNS:Publish
+          Resource: !Ref snsTopicImageUploaded
+          Condition:
+            ArnLike:
+              aws:SourceArn: !Sub 'arn:aws:s3:::${ImageBucketName}'
+      Topics:
+        - !Ref snsTopicImageUploaded
+  s3ImageBucket:
+    Type: 'AWS::S3::Bucket'
+    DependsOn: snsTopicPolicyImageUploaded
+    Properties:
+      BucketName: !Ref ImageBucketName
+      NotificationConfiguration:
+        TopicConfigurations:
+          -
+            Event: s3:ObjectCreated:*
+            Topic: !Ref snsTopicImageUploaded
+      LifecycleConfiguration:
+              Rules:
+              - Id: DeleteAllObjectsInThreeMonths
+                Prefix: ''
+                Status: Enabled
+                ExpirationInDays: '90'
+      Tags:
+        - Key: "asset" 
+          Value: !Ref TagAsset
+        - Key: "workload" 
+          Value: !Ref TagWorkload
+        - Key: "data-classification" 
+          Value: !Ref TagDataClassificationInternalUseOnly
+        - Key: "TeamNameTag" 
+          Value: !Ref TagTeamName
+  lambdaCompareImagePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref snsTopicImageUploaded
+      FunctionName: !GetAtt [lambdaCompareImage, Arn]
+  lambdaCreateThumbnailPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref snsTopicImageUploaded
+      FunctionName: !GetAtt [lambdaCreateThumbnail, Arn]
+  apiGatewayToCloudWatchLogsRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: ApiGatewayToCloudWatchLogsRole
+      AssumeRolePolicyDocument:
+       Version: "2012-10-17"
+       Statement:
+        - Effect: Allow
+          Principal:
+           Service:
+            - "apigateway.amazonaws.com"
+          Action: "sts:AssumeRole"
+      Policies:
+        -
+          PolicyName: "logToCloudWatch"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: "*"
+  lambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub '${RoleName}'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        -
+          PolicyName: "SSMReadOnlyAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:Describe*
+                  - ssm:Get*
+                  - ssm:List*
+                Resource:
+                  - arn:aws:ssm:*:*:parameter/visual-droid/api/
+        -
+          PolicyName: "logToCloudWatch"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource:
+                  - arn:aws:logs:*:*:/aws/lambda/visual_droid*
+        -
+          PolicyName: "AccessImageBucket"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                - s3:*
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ImageBucketName}'
+                  - !Sub 'arn:aws:s3:::${ImageBucketName}/*'
+  apiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: !Sub s3://${CodeBucketName}/swagger.yml
+      StageName: Prod
+  lambdaGetTestStatus:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.getTestStatus
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        getTestStatus:
+          Type: Api
+          Properties:
+            Path: /getTestStatus
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_getTestStatus
+      Description: 'Get the test status of the project and the branch'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaSetTestStatus:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.setTestStatus
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        setTestStatus:
+          Type: Api
+          Properties:
+            Path: /setTestStatus
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_setTestStatus
+      Description: 'Set the test status of the project and the branch'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaDeleteFolder:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.deleteFolder
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        deleteFolder:
+          Type: Api
+          Properties:
+            Path: /deleteFolder
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_deleteFolder
+      Description: 'Delete the folder from s3 bucket'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaSaveImage:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.saveImage
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        saveImage:
+          Type: Api
+          Properties:
+            Path: /saveImage
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_saveImage
+      Description: 'Save an image in a s3 bucket'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaSaveAndCompareImage:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.saveAndCompareImage
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        saveAndCompareImage:
+          Type: Api
+          Properties:
+            Path: /saveAndCompareImage
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_saveAndCompareImage
+      Description: 'Save an image in a s3 bucket and compare it with the compare SHA image'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaListOfNewImages:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.listOfNewImages
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        listOfNewImages:
+          Type: Api
+          Properties:
+            Path: /listOfNewImages
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_listOfNewImages
+      Description: 'Return the list of new images found after image comparison'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaListOfImageDiff:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.listOfImageDiff
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        listOfImageDiff:
+          Type: Api
+          Properties:
+            Path: /listOfImageDiff
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_listOfImageDiff
+      Description: 'Return the list of image diff found after image comparison'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaImagesProcessed:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.imagesProcessed
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        imagesProcessed:
+          Type: Api
+          Properties:
+            Path: /imagesProcessed
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_imagesProcessed
+      Description: 'Return the status and the number of images processed'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaRetryCompareImage:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.retryCompareImage
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        retryCompareImage:
+          Type: Api
+          Properties:
+            Path: /retryCompareImage
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_retryCompareImage
+      Description: 'Retry any images that were not compared'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaListImages:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.listImages
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        deleteFolder:
+          Type: Api
+          Properties:
+            Path: /listImages
+            Method: post
+            RestApiId: !Ref apiGateway
+      FunctionName: visual_droid_listImages
+      Description: 'List images for the given folder/sha'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction      
+  lambdaCreateThumbnail:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.createThumbnail
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        createThumbnail:
+          Type: SNS
+          Properties:
+            Topic: !Ref snsTopicImageUploaded
+      FunctionName: visual_droid_createThumbnail
+      Description: 'Create thumbnails for images created'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaCompareImage:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.compareImage
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      Events:
+        compareImage:
+          Type: SNS
+          Properties:
+            Topic: !Ref snsTopicImageUploaded
+      FunctionName: visual_droid_compareImage
+      Description: 'Compare an image and create a diff'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImageBucketName
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction
+  lambdaAuth:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.auth
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      FunctionName: visual_droid_auth
+      Description: 'Auth function for the authenticating api'
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          VISUAL_DROID_PASSWORD: !Ref BasicAuthStringPassword
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction

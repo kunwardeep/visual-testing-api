@@ -1,0 +1,281 @@
+swagger: '2.0'
+info:
+  version: '2017-04-20T04:08:08Z'
+  title: visual-droid-api
+schemes:
+  - https
+securityDefinitions:
+  DefaultAuthorizer:
+    type: apiKey
+    name: Authorization
+    in: header
+    x-amazon-apigateway-authtype: custom
+    x-amazon-apigateway-authorizer:
+      authorizerResultTtlInSeconds: 3600
+      authorizerUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaAuth.Arn}/invocations
+      type: request
+      identitySource: method.request.header.Authorization
+paths:
+  "/{proxy+}":
+    options:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+            Access-Control-Allow-Methods:
+              type: "string"
+            Access-Control-Allow-Headers:
+              type: "string"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+  "/getTestStatus":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Test Status Retrieved
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaGetTestStatus.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+      x-amazon-apigateway-authorizer:
+        type: token
+        authorizerResultTtlInSeconds: 300
+  "/setTestStatus":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Test Status Set
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaSetTestStatus.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+  "/deleteFolder":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Delete Folder
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaDeleteFolder.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+  "/saveImage":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: saves images to s3 bucket
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaSaveImage.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+  "/saveAndCompareImage":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: saves images to s3 bucket
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaSaveAndCompareImage.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+  "/listOfNewImages":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Retrieve the list of new images
+          headers:
+            Access-Control-Allow-Origin:
+                type: "string"
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaListOfNewImages.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+  "/listOfImageDiff":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Retrieve the list of diff images
+          headers:
+            Access-Control-Allow-Origin:
+                type: "string"
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaListOfImageDiff.Arn}/invocations
+        httpMethod: POST
+      passthroughBehavior: when_no_match
+  "/imagesProcessed":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Return the status and the number of images processed
+          headers:
+            Access-Control-Allow-Origin:
+                type: "string"
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaImagesProcessed.Arn}/invocations
+        httpMethod: POST
+      passthroughBehavior: when_no_match
+  "/retryCompareImage":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Retry any images that were not compared
+          headers:
+            Access-Control-Allow-Origin:
+                type: "string"
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaRetryCompareImage.Arn}/invocations
+        httpMethod: POST
+      passthroughBehavior: when_no_match
+  "/listImages":
+    post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      responses:
+        200:
+          description: List images for the given folder/sha
+      security:
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: 200
+        type: aws
+        uri:
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaListImages.Arn}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match

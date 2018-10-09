@@ -1,0 +1,18 @@
+version: '3.3'
+services:
+  visual-droid-test:
+    build:
+      context: ./
+      dockerfile: Dockerfile-visual-droid
+    environment:
+      - VISUAL_DROID_PASSWORD
+      - REST_API_ID
+      - AWS_REGION
+      - AWS_DEFAULT_REGION
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+      - AWS_SECURITY_TOKEN
+      - S3BUCKET_NAME_CAMP_CI_SOURCE_CODE
+      - S3BUCKET_NAME_CAMP_DEV_SOURCE_CODE
+    image: visual-droid-test

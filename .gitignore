@@ -1,0 +1,7 @@
+# Dependency directories
+node_modules/
+
+.DS_Store
+*.zip
+images/test/diff/*
+putParameters.sh

@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Parameters:
+  TagUpdateFunction:
+    Type: String
+    Description: 'Update the function code automatically'
+    Default: 'true'
+  TagTeamName:
+    Type: String
+    Description: 'Name of the team'
+    Default: '<your_team_name>'
+  TagAsset:
+    Type: String
+    Description: 'Name of the asset'
+    Default: 'visual-droid'  
+  TagWorkload:
+    Type: String
+    Description: 'Type of workload being supported by this resource'
+    Default: 'delivery'  
+  TagDataClassificationInternalUseOnly:
+    Type: String
+    Description: 'Data classification - public, internal-use-only etc'
+    Default: 'internal-use-only'  
+  TagDataClassificationNone:
+    Type: String
+    Description: 'Data classification - public, internal-use-only etc'
+    Default: 'none'         
+  CodeBucketKey:
+    Type: String
+    Description: 'Zip file containing all the lambda functions'
+    Default: 'visual-droid.zip'
+  CodeBucketName:
+    Type: String
+    Description: 's3 bucket for storing source code'
+  RoleName:
+    Type: String
+    Description: 'Name of the role'
+Resources:
+  s3CodeBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref CodeBucketName
+      Tags:
+        - Key: "asset" 
+          Value: !Ref TagAsset
+        - Key: "workload" 
+          Value: !Ref TagWorkload
+        - Key: "data-classification" 
+          Value: !Ref TagDataClassificationInternalUseOnly
+        - Key: "TeamNameTag" 
+          Value: !Ref TagTeamName
+  lambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub '${RoleName}'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        -
+          PolicyName: "logToCloudWatch"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource:
+                  - arn:aws:logs:*:*:/aws/lambda/visual_droid*
+        -
+          PolicyName: "s3ExecuteCodeBucket"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                - s3:GetObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${CodeBucketName}/*'
+        -
+          PolicyName: "lambdaUpdateFunction"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                - lambda:UpdateFunctionCode
+                Resource:
+                  - 'arn:aws:lambda:*:*:function:visual_droid*'
+        -
+          PolicyName: "lambdaList"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                - lambda:ListFunctions
+                - lambda:ListTags
+                Resource:
+                  - '*'
+  lambdaUpdateVisualDroidLambdaCode:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/lambdas.updateVisualDroidLambdaCode
+      Runtime: nodejs8.10
+      CodeUri:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref CodeBucketKey
+      FunctionName: visual_droid_updateVisualDroidLambdaCode
+      Description: 'Update the code for all visual droid functions'
+      Events:
+        updateVisualDroidLambdaCode:
+          Type: S3
+          Properties:
+            Bucket: !Ref s3CodeBucket
+            Events: s3:ObjectCreated:*
+      Role: !GetAtt [lambdaRole, Arn]
+      Timeout: 30
+      Environment:
+        Variables:
+          CODE_BUCKET_NAME : !Ref CodeBucketName
+          CODE_FILE_NAME : !Ref CodeBucketKey
+      Tags:
+        asset: !Ref TagAsset
+        workload: !Ref TagWorkload
+        data-classification: !Ref TagDataClassificationNone
+        TeamNameTag: !Ref TagTeamName
+        UpdateFunction: !Ref TagUpdateFunction

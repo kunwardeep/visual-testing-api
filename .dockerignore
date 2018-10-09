@@ -1,0 +1,5 @@
+npm-debug.log
+*.git
+*.zip
+.DS_Store
+images/test/diff/*
