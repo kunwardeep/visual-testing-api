@@ -1,4 +1,4 @@
-#visual-testing-api
+# visual-testing-api
 
 This is an open source project which is a copy of visual-droid api. The code is provided as is without any guarantee or warranties. We have no active maintainers for this repository.
 
@@ -6,8 +6,6 @@ Original documentation is below
 
 # visual-droid
 Visual-droid is a serverless REST Api that stores images and does image comparison. It uses [Looks Same](https://github.com/gemini-testing/looks-same) algo to compare the images.
-
-[![Build status](https://badge.buildkite.com/a7f2c0a2feb632246f44a05bbb813b2cfa42e6c6400322dc49.svg)](https://buildkite.com/culture-amp/visual-droid)
 
 <!-- TOC depthFrom:2 -->
 
